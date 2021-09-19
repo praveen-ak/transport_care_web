@@ -19,10 +19,7 @@ const distance = require("google-distance");
 const Agenda = require("../agenda");
 const geolib = require('geolib');
 const { RequestResponseStatusCode } = require("nexmo");
-<<<<<<< HEAD
 const { request } = require("express");
-=======
->>>>>>> ac60e197d0134b7899ab97c583b83bd2190e9729
 const stripe = require('stripe')('sk_test_51JOl26GwzlPF3YojClmory2WxpKjuUsQZMTJJtvaYbZ6oDeitr0mOsDsrokLCy2zoN2dmlTbrvDq4cwu8r4F8aZ800Xf3bpd84');
 
 
@@ -1263,12 +1260,8 @@ exports.rate_driver = async (req, res) => {
     return res.apiResponse(false, "Invalid Trip")
   }
 }
-<<<<<<< HEAD
-exports.request_order = async (req, res, next) => {
-=======
 exports.request_order = async(req, res, next) => 
 {
->>>>>>> ac60e197d0134b7899ab97c583b83bd2190e9729
   var requests = req.bodyParams;
   if (!requests.care_giver_id) {
     delete requests.care_giver_id;
@@ -1690,53 +1683,5 @@ exports.add_wallet = async (req, res, next) => {
       await transactions.save();
       return res.apiResponse(true, "Amount added", { user_detail })
     }
-<<<<<<< HEAD
-=======
-}
-exports.create_stripe_token = async(req, res, next) => 
-{
-  var requests = req.bodyParams;
-  var charge = stripe.sources.create({  // stripe payment start
-    type: 'ach_credit_transfer',
-    currency: 'usd',
-    owner: {
-      email: 'jenny.rosen@example.com'
-    }
-  }, async (err, charge) => {
-    if (err) {
-      return res.apiResponse(false, "Failed", {err})
-    }
-    else {
-      return res.apiResponse(true, "Charged", {charge})
-    }
-  })
-}
-exports.add_wallet = async(req, res, next) => 
-{
-  var requests = req.bodyParams;
-  var charge = stripe.charges.create({  // stripe payment start
-    amount:  Math.round(parseInt(requests.total_amount)*100),
-    currency: 'usd',
-    source: requests.token
-  }, async (err, charge) => {
-    if (err) {
-      return res.apiResponse(false, "Failed", {err})
-    }
-    else {
-      var user_detail = await User.findOne({ "_id": requests.user_id });
-      user_detail.wallet_amount = Number(parseFloat(user.wallet_amount) + parseFloat(charge.amount)).toFixed(2);
-      await user_detail.save();
-      var transaction_data = {}
-      transaction_data.amount = charge.amount;
-      transaction_data.user_id = requests.user_id;
-      transaction_data.type = 'wallet';
-      transaction_data.transaction_id = charge.id;
-      transaction_data.payment_type = 'payment gateway';
-      transaction_data.status = 'completed';
-      let transactions = new TransactionModel(transaction_data);
-      await transactions.save();
-      return res.apiResponse(true, "Amount added", {user_detail})
-    }
->>>>>>> ac60e197d0134b7899ab97c583b83bd2190e9729
   })
 }

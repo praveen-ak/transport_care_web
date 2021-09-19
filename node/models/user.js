@@ -105,14 +105,11 @@ const userSchema = new mongoose.Schema({
     vehicle_model: String,
     vehicle_color: String,
     vehicle_number: String,
-<<<<<<< HEAD
     wallet_amount:{
         type: String,
         default: "0"
     },
-=======
     wallet_amount:String,
->>>>>>> ac60e197d0134b7899ab97c583b83bd2190e9729
     // Driver attender details
     is_attender: String,//yes or no
     attender_age: String,
