@@ -1,6 +1,6 @@
 var mongodb = require("mongodb");
 var ObjectId = mongodb.ObjectID;
-const commonHelper=require('../helpers/commonhelpers')
+const commonHelper = require('../helpers/commonhelpers')
 const User = require("../models/user");
 const StripeCards = require("../models/stripe_cards");
 const Log = require("../models/log");
@@ -38,8 +38,8 @@ exports.get_users = async (req, res, next) => {
     role: requests.role,
     is_deleted: false,
   };
-  if(requests.is_deleted){
-    match['is_deleted']=true;
+  if (requests.is_deleted) {
+    match['is_deleted'] = true;
   }
   if (typeof requests.search != "undefined" && requests.search != "") {
     match.$or = [
@@ -91,32 +91,33 @@ exports.get_export_user = async (req, res) => {
     return res.apiResponse(true, "Success", result);
   }).populate(["store_detail"]);
 };
-async function get_default_category(user_detail,category_list) {
-  if(!user_detail.default_category_id && category_list.length)
-  {
-    await User.findOneAndUpdate({ _id: user_detail.id},
-      { $set: 
+async function get_default_category(user_detail, category_list) {
+  if (!user_detail.default_category_id && category_list.length) {
+    await User.findOneAndUpdate({ _id: user_detail.id },
+      {
+        $set:
         {
-        'default_category_id': category_list[0]._id
-        }  
+          'default_category_id': category_list[0]._id
+        }
       },
-      { new: true },(err, doc, raw) => { 
+      { new: true }, (err, doc, raw) => {
         return category_list[0]._id
       }).exec();
   }
-  else
-  {
+  else {
     return user_detail.default_category_id
   }
 }
 exports.get_wallet_data = async (req, res) => {
   var requests = req.bodyParams;
   var user_detail = await User.findOne({ _id: requests.user_id });
-  var match={ user_id: requests.user_id }
-  match = {$or:[
-    {type:'wallet'},
-    {payment_type:'wallet_payment'}
-  ]}
+  var match = { user_id: requests.user_id }
+  match = {
+    $or: [
+      { type: 'wallet' },
+      { payment_type: 'wallet_payment' }
+    ]
+  }
   var page = requests.page || 1
   var per_page = requests.per_page || 10
   var pagination = requests.pagination || "false"
@@ -133,19 +134,19 @@ exports.get_wallet_data = async (req, res) => {
   const options = {
     page: page,
     limit: per_page,
-    customLabels:myCustomLabels
+    customLabels: myCustomLabels
   };
   if (pagination == "true") {
     TransactionModel.paginate(match, options, function (err, wallet_history) {
-        var wallet_details={}
-        wallet_details.wallet_amount = user_detail.wallet_amount
-        const c = Object.assign({}, wallet_history, {wallet_details});
-        return res.apiResponse(true, "Success", c )
+      var wallet_details = {}
+      wallet_details.wallet_amount = user_detail.wallet_amount
+      const c = Object.assign({}, wallet_history, { wallet_details });
+      return res.apiResponse(true, "Success", c)
     });
   }
   else {
     var wallet_history = await TransactionModel.find(match);
-    var wallet_details={}
+    var wallet_details = {}
     wallet_details.wallet_amount = user_detail.wallet_amount
     wallet_details.wallet_history = wallet_history
     return res.apiResponse(true, "Success", wallet_details)
@@ -153,18 +154,45 @@ exports.get_wallet_data = async (req, res) => {
 }
 exports.get_driver_status = async (req, res) => {
   var requests = req.bodyParams;
-  var user_detail = await User.findOne({ _id: requests.id }).populate([{path:'driver_status_detail',match:{type:'status'}}]);
-  if(user_detail)
-  {
+  var user_detail = await User.findOne({ _id: requests.id }).populate([{ path: 'driver_status_detail', match: { type: 'status' } }]);
+  if (user_detail) {
     var driver_status_detail = user_detail.driver_status_detail;
-    return res.apiResponse(true, "Success",{driver_status_detail});
+    return res.apiResponse(true, "Success", { driver_status_detail });
 
   }
-  else
-  {
+  else {
     return res.apiResponse(false, "Invalid User id");
   }
 }
+
+exports.get_driver_locations = async (req, res) => {
+  try {
+    var requests = req.bodyParams;
+    let query ={}
+    if (requests.search_by_map == true && requests.areas && _.size(requests.areas)) {
+      query['location'] = {
+        $geoWithin: {
+          $box: [
+            [requests.areas.east, requests.areas.north],
+            [requests.areas.west, requests.areas.south]
+          ]
+        }
+      };
+    }
+
+    let result = await User.aggregate([
+      { $match: query },
+    ]
+    )
+    console.log("exports.get_driver_locations -> result", result.length)
+
+    return res.apiResponse(true, "Success", { result });
+
+  } catch (error) {
+    return res.apiResponse(false, "Invalid User id");
+  }
+}
+
 exports.get_user_detail = async (req, res) => {
   var requests = req.bodyParams;
   if (
@@ -172,43 +200,39 @@ exports.get_user_detail = async (req, res) => {
     requests.id != "" &&
     requests.id != null &&
     requests.id != "null"
-  ) 
-  {
+  ) {
     var user_detail = await User.findOne({ _id: requests.id });
     var user_populate = ['default_category_detail']
-    if(user_detail.role==2)
-    {
+    if (user_detail.role == 2) {
       var user_populate = ['category_detail']
     }
-    else
-    {
+    else {
       var user_populate = ['default_category_detail']
     }
     var category_list = await Category.find();
-    get_default_category(user_detail,category_list).then(async(category_det) => {
+    get_default_category(user_detail, category_list).then(async (category_det) => {
       var user_detail = await User.findOne({ _id: requests.id }).populate(user_populate);
       user_detail = JSON.parse(JSON.stringify(user_detail));
-      user_detail.default_category_name = (user_detail.role==2)?"":user_detail.default_category_detail.name;
+      user_detail.default_category_name = (user_detail.role == 2) ? "" : user_detail.default_category_detail.name;
       var service_type = [
-        { name: "Door to Door", image: commonHelper.getBaseurl() + "/media/assets/images/door_to_door_image.jpeg", is_care: true }, 
-        { name: "Independent Trip", image: commonHelper.getBaseurl() + "/media/assets/images/independent_image.jpeg", is_care: false }, 
+        { name: "Door to Door", image: commonHelper.getBaseurl() + "/media/assets/images/door_to_door_image.jpeg", is_care: true },
+        { name: "Independent Trip", image: commonHelper.getBaseurl() + "/media/assets/images/independent_image.jpeg", is_care: false },
         { name: "Caregiver", image: commonHelper.getBaseurl() + "/media/assets/images/caregiver_image.jpeg", is_care: true }
       ];
-      var populate=['driver_detail'];
-      var trip_details = await Trip.findOne({user_id:requests.id}).populate(populate).limit(1).sort({createdAt:-1});
+      var populate = ['driver_detail'];
+      var trip_details = await Trip.findOne({ user_id: requests.id }).populate(populate).limit(1).sort({ createdAt: -1 });
       var last_trip_detail = {}
-      if(trip_details)
-      {
+      if (trip_details) {
         last_trip_detail = {
-          id:trip_details._id,
-          service_type:trip_details.service_type,
-          category_name : trip_details.category_detail.name,
-          driver_name:trip_details.driver_detail.name,
-          format_date : trip_details.formatted_created_at,
-          amount:trip_details.price_detail.total
+          id: trip_details._id,
+          service_type: trip_details.service_type,
+          category_name: trip_details.category_detail.name,
+          driver_name: trip_details.driver_detail.name,
+          format_date: trip_details.formatted_created_at,
+          amount: trip_details.price_detail.total
         }
       }
-      return res.apiResponse(true, "Success", { user_detail,service_type,category_list,last_trip_detail });
+      return res.apiResponse(true, "Success", { user_detail, service_type, category_list, last_trip_detail });
     })
   } else {
     return res.apiResponse(false, "Invalid User id");
@@ -220,9 +244,9 @@ exports.delete_user = async (req, res, next) => {
   var requests = req.bodyParams;
   await User.findOneAndUpdate(
     { _id: requests.id },
-    { $set: {is_deleted: true} },
+    { $set: { is_deleted: true } },
   ).exec();
-  
+
   /*await User.findById(requests.id, async (err, user) => {
     if (user) {
       await user.remove();
@@ -250,7 +274,7 @@ exports.update_driver_status = async (req, res, next) => {
     message: requests.driver_status,
     info: requests.info,
   });
-  commonHelper.put_logs(requests.id,"You are updated into " + requests.driver_status + " status");
+  commonHelper.put_logs(requests.id, "You are updated into " + requests.driver_status + " status");
   newLog.save();
   if (old_user_detail.device_id && old_user_detail.device_id.length) {
     for (let i = 0; i < old_user_detail.device_id.length; ++i) {
@@ -266,8 +290,8 @@ exports.update_driver_status = async (req, res, next) => {
 
 exports.get_logs = async (req, res, next) => {
   var requests = req.bodyParams;
-  var match =  {
-    user_id:requests.user_id
+  var match = {
+    user_id: requests.user_id
   };
   var page = requests.page || 1
   var per_page = requests.per_page || 10
@@ -285,17 +309,17 @@ exports.get_logs = async (req, res, next) => {
   const options = {
     page: page,
     limit: per_page,
-    customLabels:myCustomLabels,
-    sort:{createdAt:-1}
+    customLabels: myCustomLabels,
+    sort: { createdAt: -1 }
   };
   if (pagination == "true") {
-      Log.paginate(match, options, function (err, notifications) {
-          return res.apiResponse(true, "Success", notifications)
-      });
+    Log.paginate(match, options, function (err, notifications) {
+      return res.apiResponse(true, "Success", notifications)
+    });
   }
   else {
-      var notifications = await Log.find(match).sort({createdAt:-1});
-      return res.apiResponse(true, "Success", { notifications })
+    var notifications = await Log.find(match).sort({ createdAt: -1 });
+    return res.apiResponse(true, "Success", { notifications })
   }
 }
 // exports.get_pagination = async (req, res, next) => {
@@ -338,29 +362,29 @@ exports.get_trips = async (req, res, next) => {
   var requests = req.bodyParams;
   var page = requests.page || 1
   var per_page = requests.per_page || 10
-  var pagination = (requests.pagination)?requests.pagination:"false"
+  var pagination = (requests.pagination) ? requests.pagination : "false"
   const match = {}
-  var populate=['user_detail','caregiver_detail','driver_detail',
-  {
-    path:'user_rating',
-    match:{rating_type:'driver-user'}
-  },
-  {
-    path:'driver_rating',
-    match:{rating_type:'user-driver'}
-  },
-  {
-    path:'is_user_rated',
-    match:{rating_type:'driver-user'}
-  },
-  {
-    path:'is_driver_rated',
-    match:{rating_type:'user-driver'}
-  }];
-  match['is_deleted'] =  false;
+  var populate = ['user_detail', 'caregiver_detail', 'driver_detail',
+    {
+      path: 'user_rating',
+      match: { rating_type: 'driver-user' }
+    },
+    {
+      path: 'driver_rating',
+      match: { rating_type: 'user-driver' }
+    },
+    {
+      path: 'is_user_rated',
+      match: { rating_type: 'driver-user' }
+    },
+    {
+      path: 'is_driver_rated',
+      match: { rating_type: 'user-driver' }
+    }];
+  match['is_deleted'] = false;
   var sort = { createdAt: -1 }
   if (requests.search && requests.search != "") {
-      match.invoice_id = { $regex: new RegExp("^" + requests.search, "i") }
+    match.invoice_id = { $regex: new RegExp("^" + requests.search, "i") }
   }
 
   if (requests.status && requests.status != "") {
@@ -373,14 +397,13 @@ exports.get_trips = async (req, res, next) => {
     match.driver_id = requests.driver_id
   }
   if (requests.booking_type && requests.booking_type != "") {
-    match.booking_type =  requests.booking_type
+    match.booking_type = requests.booking_type
   }
   if (requests.id && requests.id != "") {
-    var trip_detail = await Trip.findOne({_id:requests.id}).populate(populate);
-    return res.apiResponse(true, "Success", {trip_detail} )
+    var trip_detail = await Trip.findOne({ _id: requests.id }).populate(populate);
+    return res.apiResponse(true, "Success", { trip_detail })
   }
-  else
-  {
+  else {
     const myCustomLabels = {
       totalDocs: 'totalDocs',
       docs: 'trip_details',
@@ -395,26 +418,26 @@ exports.get_trips = async (req, res, next) => {
       page: page,
       limit: per_page,
       sort: sort,
-      customLabels:myCustomLabels,
-      populate:populate
+      customLabels: myCustomLabels,
+      populate: populate
     };
     var extra_detail = {
-      trips_last_week:"23",
-      trips_current_week:"5",
-      trips_per_day:"5",
-      earnings_last_week:"$85",
-      earnings_current_week:"$15",
-      earnings_per_day:"$5"
+      trips_last_week: "23",
+      trips_current_week: "5",
+      trips_per_day: "5",
+      earnings_last_week: "$85",
+      earnings_current_week: "$15",
+      earnings_per_day: "$5"
     }
     if (pagination == "true") {
-        Trip.paginate(match, options, function (err, trip_details) {
-          const c = Object.assign({}, trip_details, {extra_detail});
-            return res.apiResponse(true, "Success", c )
-        });
+      Trip.paginate(match, options, function (err, trip_details) {
+        const c = Object.assign({}, trip_details, { extra_detail });
+        return res.apiResponse(true, "Success", c)
+      });
     }
     else {
-        var trip_details = await Trip.find(match).sort(sort).populate(populate);
-        return res.apiResponse(true, "Success", {trip_details,extra_detail} )
+      var trip_details = await Trip.find(match).sort(sort).populate(populate);
+      return res.apiResponse(true, "Success", { trip_details, extra_detail })
     }
   }
 }
@@ -427,51 +450,51 @@ exports.get_caregiver = async (req, res, next) => {
 
   var sort = { createdAt: -1 }
   if (requests.search && requests.search != "") {
-      match.name = { $regex: new RegExp("^" + requests.search, "i") }
+    match.name = { $regex: new RegExp("^" + requests.search, "i") }
   }
 
   const options = {
-      page: page,
-      limit: per_page,
-      sort: sort
+    page: page,
+    limit: per_page,
+    sort: sort
   };
 
   if (typeof requests.role != "undefined" && requests.role != "") {
-      match['role'] = requests.role
+    match['role'] = requests.role
   }
   if (pagination == "true") {
-      User.paginate(match, options, function (err, caregivers) {
-          return res.apiResponse(true, "Success", {caregivers} )
-      });
+    User.paginate(match, options, function (err, caregivers) {
+      return res.apiResponse(true, "Success", { caregivers })
+    });
   }
   else {
-      var caregivers = await User.find(match).sort(sort);
-      return res.apiResponse(true, "Success", {caregivers} )
+    var caregivers = await User.find(match).sort(sort);
+    return res.apiResponse(true, "Success", { caregivers })
   }
 
 }
 
 exports.add_user_caregiver = async (req, res, next) => {
   var requests = req.bodyParams;
-  if(requests.user_id) {
-    var check_user_caregiver = await UserCareGiver.find({ user_id: requests.user_id, care_giver_id: requests.care_giver_id});
-    if(check_user_caregiver.length) {
+  if (requests.user_id) {
+    var check_user_caregiver = await UserCareGiver.find({ user_id: requests.user_id, care_giver_id: requests.care_giver_id });
+    if (check_user_caregiver.length) {
       return res.apiResponse(false, "User can already have an Caregiver");
     }
     else {
       var newCareGiver = new UserCareGiver(requests);
       var added_caregiver = await newCareGiver.save();
-      var caregiver = await UserCareGiver.findOne({_id:added_caregiver.id}).populate([
+      var caregiver = await UserCareGiver.findOne({ _id: added_caregiver.id }).populate([
         {
           path: 'caregiver_detail',
         },
         {
           path: 'user_detail',
-        }   
+        }
       ])
-      commonHelper.put_logs(requests.user_id,"New caregiver added "+caregiver.caregiver_detail.name);
-      commonHelper.put_logs(requests.care_giver_id,"New undercare added "+caregiver.user_detail.name);
-      return res.apiResponse(true, "Record Inserted Successfully", {caregiver})
+      commonHelper.put_logs(requests.user_id, "New caregiver added " + caregiver.caregiver_detail.name);
+      commonHelper.put_logs(requests.care_giver_id, "New undercare added " + caregiver.user_detail.name);
+      return res.apiResponse(true, "Record Inserted Successfully", { caregiver })
     }
   }
   else {
@@ -482,11 +505,11 @@ exports.add_user_caregiver = async (req, res, next) => {
 exports.delete_user_caregiver = async (req, res, next) => {
   var requests = req.bodyParams;
   console.log(requests);
-  await UserCareGiver.findOne({ user_id: requests.user_id, care_giver_id: requests.care_giver_id}, async (err, user_caregiver) => {
+  await UserCareGiver.findOne({ user_id: requests.user_id, care_giver_id: requests.care_giver_id }, async (err, user_caregiver) => {
     if (user_caregiver) {
       await user_caregiver.remove();
-      commonHelper.put_logs(requests.user_id,"Caregiver removed "+caregiver.caregiver_detail.name);
-      commonHelper.put_logs(requests.care_giver_id,"Undercare removed "+caregiver.user_detail.name);
+      commonHelper.put_logs(requests.user_id, "Caregiver removed " + caregiver.caregiver_detail.name);
+      commonHelper.put_logs(requests.care_giver_id, "Undercare removed " + caregiver.user_detail.name);
     }
   });
   return res.apiResponse(true, "Record Deleted Successfully");
@@ -499,14 +522,14 @@ exports.get_user_caregiver = async (req, res, next) => {
   var pagination = requests.pagination || "false"
   const match = {}
 
-  var sort = { is_default :-1}
+  var sort = { is_default: -1 }
   var populate = [
     {
       path: 'user_detail',
     },
     {
       path: 'caregiver_detail',
-    }  
+    }
   ];
   const myCustomLabels = {
     totalDocs: 'totalDocs',
@@ -519,80 +542,77 @@ exports.get_user_caregiver = async (req, res, next) => {
     pagingCounter: 'pagingCounter'
   };
   const options = {
-      page: page,
-      limit: per_page,
-      sort: sort,
-      customLabels: myCustomLabels,
-      populate: (populate)
+    page: page,
+    limit: per_page,
+    sort: sort,
+    customLabels: myCustomLabels,
+    populate: (populate)
   };
 
   if (typeof requests.user_id != "undefined" && requests.user_id != "") {
-      match['user_id'] = requests.user_id
+    match['user_id'] = requests.user_id
   }
   if (typeof requests.care_giver_id != "undefined" && requests.care_giver_id != "") {
     match['care_giver_id'] = requests.care_giver_id
   }
   if (pagination == "true") {
-      UserCareGiver.paginate(match, options, function (err, caregivers) {
-          return res.apiResponse(true, "Success", caregivers )
-      });
+    UserCareGiver.paginate(match, options, function (err, caregivers) {
+      return res.apiResponse(true, "Success", caregivers)
+    });
   }
   else {
-      var caregivers = await UserCareGiver.find(match).sort(sort).populate(populate);
-      return res.apiResponse(true, "Success", {caregivers} )
+    var caregivers = await UserCareGiver.find(match).sort(sort).populate(populate);
+    return res.apiResponse(true, "Success", { caregivers })
   }
 
 }
 
 exports.add_driver_attender = async (req, res, next) => {
-  var requests = req.bodyParams;  
-  if(requests.type == "add") {
+  var requests = req.bodyParams;
+  if (requests.type == "add") {
     var check_user = await User.find({ _id: requests.driver_id, role: 2 });
-    if(check_user.length) {
-      var get_attender = await Attender.find({driver_id:requests.driver_id});
-      if(!get_attender.length)
-      {
+    if (check_user.length) {
+      var get_attender = await Attender.find({ driver_id: requests.driver_id });
+      if (!get_attender.length) {
         requests.is_default = true
       }
       var attender = new Attender(requests);
       await attender.save();
-      return res.apiResponse(true, "Record Inserted Successfully",{attender})
+      return res.apiResponse(true, "Record Inserted Successfully", { attender })
     }
   }
-  if(requests.type == "update") {
+  if (requests.type == "update") {
     var old_attender_detail = await Attender.findOne({ _id: requests.id });
-    if(old_attender_detail) {
-      if(requests.switch)
-      {
-        Attender.updateOne({"created": false}, {"$set":{"created": true}}, {"multi": true}, (err, writeResult) => {});
+    if (old_attender_detail) {
+      if (requests.switch) {
+        Attender.updateOne({ "created": false }, { "$set": { "created": true } }, { "multi": true }, (err, writeResult) => { });
 
         await Attender.update(
           { _id: requests.id },
-          { $set: {is_default:false} },
+          { $set: { is_default: false } },
           { new: true },
-          (err,attender)=>{
-            return res.apiResponse(true, "Record Updated Successfully",{attender});
+          (err, attender) => {
+            return res.apiResponse(true, "Record Updated Successfully", { attender });
           }
-        ).exec();   
+        ).exec();
         await Attender.findOneAndUpdate(
           { _id: requests.id },
-          { $set: {is_default:true} },
+          { $set: { is_default: true } },
           { new: true },
-          (err,attender)=>{
-            return res.apiResponse(true, "Record Updated Successfully",{attender});
+          (err, attender) => {
+            return res.apiResponse(true, "Record Updated Successfully", { attender });
           }
-        ).exec();   
+        ).exec();
       }
-      else
-      {
+      else {
         await Attender.findOneAndUpdate(
           { _id: requests.id },
           { $set: requests },
           { new: true },
-          (err,attender)=>{
-            return res.apiResponse(true, "Record Updated Successfully",{attender});
+          (err, attender) => {
+            return res.apiResponse(true, "Record Updated Successfully", { attender });
           }
-        ).exec();      
+        ).exec();
       }
     }
   }
@@ -616,29 +636,29 @@ exports.get_driver_attender = async (req, res, next) => {
   const match = {}
 
   var sort = { createdAt: -1 }
-  
+
   const options = {
-      page: page,
-      limit: per_page,
-      sort: sort,
-      populate: ([
-        {
-          path: 'driver_detail',
-        } 
-      ])
+    page: page,
+    limit: per_page,
+    sort: sort,
+    populate: ([
+      {
+        path: 'driver_detail',
+      }
+    ])
   };
 
   if (typeof requests.driver_id != "undefined" && requests.driver_id != "") {
-      match['driver_id'] = requests.driver_id
+    match['driver_id'] = requests.driver_id
   }
   if (pagination == "true") {
-      Attender.paginate(match, options, function (err, attenders) {
-          return res.apiResponse(true, "Success", {attenders} )
-      });
+    Attender.paginate(match, options, function (err, attenders) {
+      return res.apiResponse(true, "Success", { attenders })
+    });
   }
   else {
-      var attenders = await Attender.find(match).sort(sort);
-      return res.apiResponse(true, "Success", {attenders} ) 
+    var attenders = await Attender.find(match).sort(sort);
+    return res.apiResponse(true, "Success", { attenders })
   }
 }
 
@@ -647,7 +667,7 @@ exports.add_user_feedback = async (req, res, next) => {
   console.log(requests);
 
   var check_user = await User.find({ _id: requests.user_id });
-  if(check_user.length) {
+  if (check_user.length) {
     var newFeedback = new Feedback(requests);
     await newFeedback.save();
     return res.apiResponse(true, "Record Inserted Successfully", newFeedback._id)
@@ -657,19 +677,19 @@ exports.add_user_feedback = async (req, res, next) => {
 exports.update_profile = async (req, res, next) => {
   if (typeof req.bodyParams == "undefined") {
     var requests = req;
-  } 
+  }
   else {
     var requests = req.bodyParams;
   }
 
   var old_user_detail = await User.findOne({ _id: requests.id });
-  if(old_user_detail) {
+  if (old_user_detail) {
     await User.findOneAndUpdate(
       { _id: requests.id },
       { $set: requests },
       { new: true },
-      (err,user_detail)=>{
-        return res.apiResponse(true, "Record Updated Successfully",{user_detail});
+      (err, user_detail) => {
+        return res.apiResponse(true, "Record Updated Successfully", { user_detail });
       }
     ).exec();
   }
@@ -678,19 +698,20 @@ exports.update_profile = async (req, res, next) => {
 exports.update_availability_status = async (req, res, next) => {
   if (typeof req.bodyParams == "undefined") {
     var requests = req;
-  } 
+  }
   else {
     var requests = req.bodyParams;
   }
 
   var old_user_detail = await User.findOne({ _id: requests.id, role: 2 });
-  if(old_user_detail) {
+  if (old_user_detail) {
     await User.findOneAndUpdate(
       { _id: requests.id },
-      { $set: 
+      {
+        $set:
         {
           'availability_status': requests.status
-        } 
+        }
       },
       { new: true }
     ).exec();
@@ -705,103 +726,98 @@ exports.get_home_page_details = async (req, res, next) => {
   var requests = req.bodyParams;
   const match = {};
   var service_type = [
-    { name: "Door to Door", image: commonHelper.getBaseurl() + "/media/assets/images/door_to_door_image.jpeg", is_care: true }, 
-    { name: "Independent Trip", image: commonHelper.getBaseurl() + "/media/assets/images/independent_image.jpeg", is_care: false }, 
+    { name: "Door to Door", image: commonHelper.getBaseurl() + "/media/assets/images/door_to_door_image.jpeg", is_care: true },
+    { name: "Independent Trip", image: commonHelper.getBaseurl() + "/media/assets/images/independent_image.jpeg", is_care: false },
     { name: "Caregiver", image: commonHelper.getBaseurl() + "/media/assets/images/caregiver_image.jpeg", is_care: true }
   ];
   var nearby_drivers = [];
   var caregivers = [];
-  var trip_populate=['user_detail','caregiver_detail','driver_detail',
-  {
-    path:'user_rating',
-    match:{rating_type:'driver-user'}
-  },
-  {
-    path:'driver_rating',
-    match:{rating_type:'user-driver'}
-  },
-  {
-    path:'is_user_rated',
-    match:{rating_type:'driver-user'}
-  },
-  {
-    path:'is_driver_rated',
-    match:{rating_type:'user-driver'}
-  }];
-  if (typeof requests.user_id != "undefined" && requests.user_id != "") 
-  {
-    var user_detail = await User.findOne({_id:requests.user_id});
-    if(user_detail.role==1)
+  var trip_populate = ['user_detail', 'caregiver_detail', 'driver_detail',
     {
-      match['user_id'] = requests.user_id;  
+      path: 'user_rating',
+      match: { rating_type: 'driver-user' }
+    },
+    {
+      path: 'driver_rating',
+      match: { rating_type: 'user-driver' }
+    },
+    {
+      path: 'is_user_rated',
+      match: { rating_type: 'driver-user' }
+    },
+    {
+      path: 'is_driver_rated',
+      match: { rating_type: 'user-driver' }
+    }];
+  if (typeof requests.user_id != "undefined" && requests.user_id != "") {
+    var user_detail = await User.findOne({ _id: requests.user_id });
+    if (user_detail.role == 1) {
+      match['user_id'] = requests.user_id;
     }
-    else
-    {
+    else {
       match['care_giver_id'] = requests.user_id;
     }
-    
+
     var origin = requests.current_location.split(",");
     var matches = {
       role: 2,
       status: 'active'
     };
     // matches['trip_status'] = 'online';
-    matches['location'] = { 
-        $nearSphere: {
-            $maxDistance: 20 * 1000,
-            $geometry: {
-                type: "Point",
-                coordinates: origin
-            }
+    matches['location'] = {
+      $nearSphere: {
+        $maxDistance: 20 * 1000,
+        $geometry: {
+          type: "Point",
+          coordinates: origin
         }
+      }
     }
     nearby_drivers = await User.find(matches);
-    caregivers = await UserCareGiver.find(match).sort({is_default:-1}).populate([
+    caregivers = await UserCareGiver.find(match).sort({ is_default: -1 }).populate([
       {
         path: 'caregiver_detail',
       },
       {
         path: 'user_detail',
-      }  
+      }
     ]);
-    var current_trip_detail = await Trip.find({ user_id: requests.user_id, is_deleted: false, trip_status:{$in:['pending', 'arrived','accepted' , 'start_trip', 'end_trip']} }).populate(trip_populate);
+    var current_trip_detail = await Trip.find({ user_id: requests.user_id, is_deleted: false, trip_status: { $in: ['pending', 'arrived', 'accepted', 'start_trip', 'end_trip'] } }).populate(trip_populate);
   }
-  else if (typeof requests.driver_id != "undefined" && requests.driver_id != "") 
-  {
-    var user_detail = await User.findOne({_id:requests.driver_id});
-    var current_trip_detail = await Trip.find({ driver_id: requests.driver_id, is_deleted: false, trip_status:{$in:['pending', 'arrived','accepted' , 'start_trip','end_trip']} }).populate(trip_populate);
+  else if (typeof requests.driver_id != "undefined" && requests.driver_id != "") {
+    var user_detail = await User.findOne({ _id: requests.driver_id });
+    var current_trip_detail = await Trip.find({ driver_id: requests.driver_id, is_deleted: false, trip_status: { $in: ['pending', 'arrived', 'accepted', 'start_trip', 'end_trip'] } }).populate(trip_populate);
   }
   var category_list = await Category.find();
 
-  return res.apiResponse(true, "Success", { category_list,user_detail, caregivers, service_type, current_trip_detail, nearby_drivers });
-} 
+  return res.apiResponse(true, "Success", { category_list, user_detail, caregivers, service_type, current_trip_detail, nearby_drivers });
+}
 
 exports.calculate_fare_estimation = async (req, res, next) => {
   var requests = req.bodyParams;
   var API_KEY = 'AIzaSyCUbgwz5a9IidJRM8QA7Ms3K5ibIKB_B6M';
-  var testing = (requests.testing && requests.testing=="false")?false:true;
+  var testing = (requests.testing && requests.testing == "false") ? false : true;
   var distance_time;
-  if(requests.origin) {
+  if (requests.origin) {
     var origin = requests.origin.split(",");
     var match = {
       role: 2,
       status: 'active',
       trip_status: 'online'
     };
-    match['location'] = { 
-        $nearSphere: {
-            $maxDistance: 20 * 1000,
-            $geometry: {
-                type: "Point",
-                coordinates: origin
-            }
+    match['location'] = {
+      $nearSphere: {
+        $maxDistance: 20 * 1000,
+        $geometry: {
+          type: "Point",
+          coordinates: origin
         }
+      }
     }
     var get_drivers = await User.find(match).distinct('category_id');
-    var category_list = await Category.find({ '_id': { $in : get_drivers }});
+    var category_list = await Category.find({ '_id': { $in: get_drivers } });
     category_list = JSON.parse(JSON.stringify(category_list));
-    if(testing)
-    {
+    if (testing) {
       var distances = {
         "index": null,
         "distance": "16.0 km",
@@ -818,27 +834,26 @@ exports.calculate_fare_estimation = async (req, res, next) => {
         "selected_origin": "9.9619342,78.1266277",
         "selected_destination": "9.8807146,78.0563409"
       }
-      for(var i = 0; i < category_list.length; i++) {
-        category_list[i].calculated_price = parseFloat(category_list[i].price * (distances.distanceValue/1000)).toFixed(2);
+      for (var i = 0; i < category_list.length; i++) {
+        category_list[i].calculated_price = parseFloat(category_list[i].price * (distances.distanceValue / 1000)).toFixed(2);
       }
-      return res.apiResponse(true, "Success", { distances, category_list } );
+      return res.apiResponse(true, "Success", { distances, category_list });
     }
-    else
-    {
+    else {
       distance.apiKey = API_KEY;
       await distance.get(
         {
           origin: requests.origin,
           destination: requests.destination
         },
-        async function(err, distances) {
+        async function (err, distances) {
           if (err) return console.log(err);
-          for(var i = 0; i < category_list.length; i++) {
-            category_list[i].calculated_price = parseFloat(category_list[i].price * (distances.distanceValue/1000)).toFixed(2);
+          for (var i = 0; i < category_list.length; i++) {
+            category_list[i].calculated_price = parseFloat(category_list[i].price * (distances.distanceValue / 1000)).toFixed(2);
           }
           distances.selected_origin = requests.origin;
           distances.selected_destination = requests.destination;
-          return res.apiResponse(true, "Success", { distances, category_list } );
+          return res.apiResponse(true, "Success", { distances, category_list });
         }
       );
     }
@@ -848,37 +863,36 @@ exports.calculate_fare_estimation = async (req, res, next) => {
 exports.trip_update = async (req, res, next) => {
   var requests = req.bodyParams;
   await Trip.findOneAndUpdate({ _id: requests.id },
-    { $set: 
-      requests
+    {
+      $set:
+        requests
     },
     { new: true },
-    async(err,trip_detail)=>{
-      if(err)
-      {
+    async (err, trip_detail) => {
+      if (err) {
         return res.apiResponse(false, "Invalid Data");
       }
-      else
-      {
-        var trip_populate=['user_detail','caregiver_detail','driver_detail',
-        {
-          path:'user_rating',
-          match:{rating_type:'driver-user'}
-        },
-        {
-          path:'driver_rating',
-          match:{rating_type:'user-driver'}
-        },
-        {
-          path:'is_user_rated',
-          match:{rating_type:'driver-user'}
-        },
-        {
-          path:'is_driver_rated',
-          match:{rating_type:'user-driver'}
-        }];
-        var trip_detail = await Trip.findOne({ _id: trip_detail._id}).populate(trip_populate);
-        global.io.in("trip_"+ trip_detail.id).emit('trip_detail', { trip_detail });
-        return res.apiResponse(true, "Status Updated Successfully",{ trip_detail });
+      else {
+        var trip_populate = ['user_detail', 'caregiver_detail', 'driver_detail',
+          {
+            path: 'user_rating',
+            match: { rating_type: 'driver-user' }
+          },
+          {
+            path: 'driver_rating',
+            match: { rating_type: 'user-driver' }
+          },
+          {
+            path: 'is_user_rated',
+            match: { rating_type: 'driver-user' }
+          },
+          {
+            path: 'is_driver_rated',
+            match: { rating_type: 'user-driver' }
+          }];
+        var trip_detail = await Trip.findOne({ _id: trip_detail._id }).populate(trip_populate);
+        global.io.in("trip_" + trip_detail.id).emit('trip_detail', { trip_detail });
+        return res.apiResponse(true, "Status Updated Successfully", { trip_detail });
       }
     }
   ).exec();
@@ -886,8 +900,8 @@ exports.trip_update = async (req, res, next) => {
 exports.update_trip_status = async (req, res, next) => {
   var requests = req.bodyParams;
   var old_detail = await Trip.findOne({ _id: requests.trip_id });
-  if(old_detail) {
-    var update_data={};
+  if (old_detail) {
+    var update_data = {};
     update_data.trip_status = requests.status;
     update_data.is_deleted = false;
     switch (update_data.trip_status) {
@@ -902,202 +916,196 @@ exports.update_trip_status = async (req, res, next) => {
         break;
       case 'completed':
         update_data.completed_at = moment();
-        break; 
+        break;
       case 'cancelled':
-        if(requests.type && requests.type!="")
-        {
+        if (requests.type && requests.type != "") {
           update_data.cancelled_by = requests.type;
         }
         update_data.cancelled_at = moment();
-        break;    
+        break;
       default:
         break;
     }
     await Trip.findOneAndUpdate({ _id: requests.trip_id },
-      { $set: 
-        update_data  
+      {
+        $set:
+          update_data
       },
       { new: true }
     ).exec();
-    if(old_detail.driver_id && (requests.status == 'end_trip' || requests.status == 'cancelled')) {
+    if (old_detail.driver_id && (requests.status == 'end_trip' || requests.status == 'cancelled')) {
       await User.findOneAndUpdate({ _id: old_detail.driver_id, role: 2 },
-      { $set: 
         {
-        'trip_status': 'online',
-        'current_trip_id':''
-        }  
+          $set:
+          {
+            'trip_status': 'online',
+            'current_trip_id': ''
+          }
+        },
+        { new: true },
+        (err, doc, raw) => {
+
+        }).exec();
+    }
+    if (requests.status == 'completed') {
+      var user_detail = await User.findOne({ _id: old_detail.user_id })
+      commonHelper.send_mail_nodemailer(user_detail.email, "booking_confirmation", old_detail);
+    }
+    var trip_populate = ['user_detail', 'caregiver_detail', 'driver_detail',
+      {
+        path: 'user_rating',
+        match: { rating_type: 'driver-user' }
       },
-      { new: true },
-      (err, doc, raw) => { 
-        
-      }).exec();
-    }
-    if(requests.status == 'completed')
-    {
-      var user_detail = await User.findOne({ _id: old_detail.user_id})
-      commonHelper.send_mail_nodemailer(user_detail.email,"booking_confirmation",old_detail);
-    }
-    var trip_populate=['user_detail','caregiver_detail','driver_detail',
-    {
-      path:'user_rating',
-      match:{rating_type:'driver-user'}
-    },
-    {
-      path:'driver_rating',
-      match:{rating_type:'user-driver'}
-    },
-    {
-      path:'is_user_rated',
-      match:{rating_type:'driver-user'}
-    },
-    {
-      path:'is_driver_rated',
-      match:{rating_type:'user-driver'}
-    }];
-    var trip_detail = await Trip.findOne({ _id: requests.trip_id}).populate(trip_populate);
+      {
+        path: 'driver_rating',
+        match: { rating_type: 'user-driver' }
+      },
+      {
+        path: 'is_user_rated',
+        match: { rating_type: 'driver-user' }
+      },
+      {
+        path: 'is_driver_rated',
+        match: { rating_type: 'user-driver' }
+      }];
+    var trip_detail = await Trip.findOne({ _id: requests.trip_id }).populate(trip_populate);
     switch (update_data.trip_status) {
       case 'arrived':
-        commonHelper.put_logs(trip_detail.driver_id,trip_detail.invoice_id+" - Arrived");
-        commonHelper.put_logs(trip_detail.user_id,trip_detail.invoice_id+" - "+trip_detail.driver_detail.name+" arrived your location");
+        commonHelper.put_logs(trip_detail.driver_id, trip_detail.invoice_id + " - Arrived");
+        commonHelper.put_logs(trip_detail.user_id, trip_detail.invoice_id + " - " + trip_detail.driver_detail.name + " arrived your location");
         break;
       case 'start_trip':
-        commonHelper.put_logs(trip_detail.driver_id,trip_detail.invoice_id+" - Trip Started");
-        commonHelper.put_logs(trip_detail.user_id,trip_detail.invoice_id+" - Trip Started");
+        commonHelper.put_logs(trip_detail.driver_id, trip_detail.invoice_id + " - Trip Started");
+        commonHelper.put_logs(trip_detail.user_id, trip_detail.invoice_id + " - Trip Started");
         break;
       case 'end_trip':
-        commonHelper.put_logs(trip_detail.driver_id,trip_detail.invoice_id+" - Reached Destination");
-        commonHelper.put_logs(trip_detail.user_id,trip_detail.invoice_id+" - Reached Destination");
+        commonHelper.put_logs(trip_detail.driver_id, trip_detail.invoice_id + " - Reached Destination");
+        commonHelper.put_logs(trip_detail.user_id, trip_detail.invoice_id + " - Reached Destination");
         break;
       case 'completed':
-        commonHelper.put_logs(trip_detail.driver_id,trip_detail.invoice_id+" - Trip Completed");
-        commonHelper.put_logs(trip_detail.user_id,trip_detail.invoice_id+" - Trip Completed");
-        break; 
+        commonHelper.put_logs(trip_detail.driver_id, trip_detail.invoice_id + " - Trip Completed");
+        commonHelper.put_logs(trip_detail.user_id, trip_detail.invoice_id + " - Trip Completed");
+        break;
       case 'cancelled':
-        commonHelper.put_logs(trip_detail.driver_id,trip_detail.invoice_id+" - Trip Cancelled");
-        commonHelper.put_logs(trip_detail.user_id,trip_detail.invoice_id+" - Trip Cancelled");
-        break;    
+        commonHelper.put_logs(trip_detail.driver_id, trip_detail.invoice_id + " - Trip Cancelled");
+        commonHelper.put_logs(trip_detail.user_id, trip_detail.invoice_id + " - Trip Cancelled");
+        break;
       default:
         break;
     }
     await caregiver_push_notifications(trip_detail);
-    if(update_data.trip_status === "completed"){
-        /**
-        * @info send email using through nodemailer after payment *(booking confirmatin)
-        */
+    if (update_data.trip_status === "completed") {
+      /**
+      * @info send email using through nodemailer after payment *(booking confirmatin)
+      */
       let email = ""
-      if(Array.isArray(trip_detail.user_detail)){
+      if (Array.isArray(trip_detail.user_detail)) {
         email = trip_detail.user_detail[0].email
-      }else{
+      } else {
         email = trip_detail.user_detail.email
       }
-      commonHelper.send_mail_nodemailer(email,"trip_summary",{});
+      commonHelper.send_mail_nodemailer(email, "trip_summary", {});
     }
-    global.io.in("trip_"+ trip_detail.id).emit('trip_detail', { trip_detail });
-    return res.apiResponse(true, "Status Updated Successfully",{ trip_detail });
+    global.io.in("trip_" + trip_detail.id).emit('trip_detail', { trip_detail });
+    return res.apiResponse(true, "Status Updated Successfully", { trip_detail });
   }
 };
 
 exports.accept_request = async (req, res, next) => {
   var requests = req.bodyParams;
   var request_detail = await RequestDetail.findOne({ trip_id: requests.trip_id, driver_id: requests.driver_id });
-  var trip_detail = await Trip.findOne({_id:requests.trip_id});
-  if(trip_detail.trip_status=="processing")
-  {
+  var trip_detail = await Trip.findOne({ _id: requests.trip_id });
+  if (trip_detail.trip_status == "processing") {
     await Trip.findOneAndUpdate(
       { _id: requests.trip_id },
-      { $set: 
+      {
+        $set:
         {
-        'driver_id': requests.driver_id,
-        'trip_status': 'accepted',
-        'is_deleted': false,
-        'accepted_at':moment(),
-        'duration':request_detail.duration
-        }  
+          'driver_id': requests.driver_id,
+          'trip_status': 'accepted',
+          'is_deleted': false,
+          'accepted_at': moment(),
+          'duration': request_detail.duration
+        }
       },
       { new: true }
     ).exec();
 
 
     //updating trip id in driver table(user table) for send driver instance location to all using sockets
-    await User.findOneAndUpdate({ _id: requests.driver_id },{ $set: {'current_trip_id': requests.trip_id}},{ new: true }).exec();
-    
-    var trip_populate=['user_detail','caregiver_detail','driver_detail',
-    {
-      path:'user_rating',
-      match:{rating_type:'driver-user'}
-    },
-    {
-      path:'driver_rating',
-      match:{rating_type:'user-driver'}
-    },
-    {
-      path:'is_user_rated',
-      match:{rating_type:'driver-user'}
-    },
-    {
-      path:'is_driver_rated',
-      match:{rating_type:'user-driver'}
-    }];
+    await User.findOneAndUpdate({ _id: requests.driver_id }, { $set: { 'current_trip_id': requests.trip_id } }, { new: true }).exec();
+
+    var trip_populate = ['user_detail', 'caregiver_detail', 'driver_detail',
+      {
+        path: 'user_rating',
+        match: { rating_type: 'driver-user' }
+      },
+      {
+        path: 'driver_rating',
+        match: { rating_type: 'user-driver' }
+      },
+      {
+        path: 'is_user_rated',
+        match: { rating_type: 'driver-user' }
+      },
+      {
+        path: 'is_driver_rated',
+        match: { rating_type: 'user-driver' }
+      }];
     var trip_detail = await Trip.findOne({ _id: requests.trip_id }).populate(trip_populate);
-    commonHelper.put_logs(trip_detail.driver_id,trip_detail.invoice_id+" - Request accepted");
-    commonHelper.put_logs(trip_detail.user_id,trip_detail.invoice_id+" - Request accepted by "+trip_detail.driver_detail.name);
+    commonHelper.put_logs(trip_detail.driver_id, trip_detail.invoice_id + " - Request accepted");
+    commonHelper.put_logs(trip_detail.user_id, trip_detail.invoice_id + " - Request accepted by " + trip_detail.driver_detail.name);
     await caregiver_push_notifications(trip_detail);
-    global.io.in("user_"+ trip_detail.user_id).emit('trip_detail', { trip_detail });
-    return res.apiResponse(true, "Request Accepted Successfully", { trip_detail } );
+    global.io.in("user_" + trip_detail.user_id).emit('trip_detail', { trip_detail });
+    return res.apiResponse(true, "Request Accepted Successfully", { trip_detail });
   }
-  else
-  {
+  else {
     return res.apiResponse(false, "Request Already Accepted");
   }
 };
-exports.caregiver_reminder_cron = async(req,res,next)=>{
-  await func_caregiver_reminder_cron().then(async(data) => {
-    if(req)
-    {
-      return res.apiResponse(true, "Order updated Successfully",data)
+exports.caregiver_reminder_cron = async (req, res, next) => {
+  await func_caregiver_reminder_cron().then(async (data) => {
+    if (req) {
+      return res.apiResponse(true, "Order updated Successfully", data)
     }
   });
 }
 async function func_caregiver_reminder_cron() {
   const today = moment().startOf('day')
-  var trips = await Trip.find({trip_status:'start_trip'});
-  if(trips.length)
-  {
-    for(var i=0; i<trips.length;i++)
-    {
+  var trips = await Trip.find({ trip_status: 'start_trip' });
+  if (trips.length) {
+    for (var i = 0; i < trips.length; i++) {
       var estimated_time = moment(trips[i].started_at).add(trips[i].distances.durationValue, 'seconds');  // see the cloning?
-      if(moment(estimated_time).isSameOrAfter())
-      {
+      if (moment(estimated_time).isSameOrAfter()) {
         var a = moment();//now
         var b = moment(estimated_time);
-        if(b.diff(a, 'minutes')==5)
-        {
-          var trip_populate=['user_detail','caregiver_detail','driver_detail',
-          {
-            path:'user_rating',
-            match:{rating_type:'driver-user'}
-          },
-          {
-            path:'driver_rating',
-            match:{rating_type:'user-driver'}
-          },
-          {
-            path:'is_user_rated',
-            match:{rating_type:'driver-user'}
-          },
-          {
-            path:'is_driver_rated',
-            match:{rating_type:'user-driver'}
-          }];
-          var trip_detail = await Trip.findOne({ _id: trips[i]._id}).populate(trip_populate);
-          global.io.in("user_" + trips[i].care_giver_id).emit('caregiver_reminder', {trip_detail});
-          var caregiver_detail = await User.findOne({'_id':trips[i].care_giver_id});
+        if (b.diff(a, 'minutes') == 5) {
+          var trip_populate = ['user_detail', 'caregiver_detail', 'driver_detail',
+            {
+              path: 'user_rating',
+              match: { rating_type: 'driver-user' }
+            },
+            {
+              path: 'driver_rating',
+              match: { rating_type: 'user-driver' }
+            },
+            {
+              path: 'is_user_rated',
+              match: { rating_type: 'driver-user' }
+            },
+            {
+              path: 'is_driver_rated',
+              match: { rating_type: 'user-driver' }
+            }];
+          var trip_detail = await Trip.findOne({ _id: trips[i]._id }).populate(trip_populate);
+          global.io.in("user_" + trips[i].care_giver_id).emit('caregiver_reminder', { trip_detail });
+          var caregiver_detail = await User.findOne({ '_id': trips[i].care_giver_id });
           if (caregiver_detail.device_id && caregiver_detail.device_id.length) {
             for (let i = 0; i < caregiver_detail.device_id.length; ++i) {
               Firebase.singleNotification(
                 caregiver_detail.device_id[i],
-                "Under Care ["+user_detail.name+"]",
-                trip_detail.invoice_id+" - Almost near you, we will reach you in 5 minutes"
+                "Under Care [" + user_detail.name + "]",
+                trip_detail.invoice_id + " - Almost near you, we will reach you in 5 minutes"
               );
             }
           }
@@ -1109,44 +1117,40 @@ async function func_caregiver_reminder_cron() {
 }
 exports.cancel_request = async (req, res, next) => {
   var requests = req.bodyParams;
-  if(requests.type=="user")
-  {
-    await Trip.findOneAndUpdate({ "_id": requests.trip_id }, { "$set": { 'cancelled_at':moment(),'trip_status': 'cancelled' } }, { new: true },async(err,doc,trip_detail)=>{
+  if (requests.type == "user") {
+    await Trip.findOneAndUpdate({ "_id": requests.trip_id }, { "$set": { 'cancelled_at': moment(), 'trip_status': 'cancelled' } }, { new: true }, async (err, doc, trip_detail) => {
       await caregiver_push_notifications(trip_detail);
     }).exec();
-    await RequestDetail.deleteMany({'trip_id':requests.trip_id},function(){});
+    await RequestDetail.deleteMany({ 'trip_id': requests.trip_id }, function () { });
   }
-  else
-  {
+  else {
     var request_detail = await RequestDetail.findOne({ trip_id: requests.trip_id, driver_id: requests.driver_id });
-    if(request_detail)
-    {
+    if (request_detail) {
       request_detail.remove();
     }
   }
   return res.apiResponse(true, "Request Cancelled");
 };
 async function check_rating_for_complete_trip(trip_id) {
-  var trip_detail = await Trip.findOne({ _id: trip_id}).populate(['is_user_rated','is_driver_rated']);
-  if(trip_detail)
-  {
-    if(trip_detail.is_user_rated && trip_detail.is_driver_rated)
-    {
+  var trip_detail = await Trip.findOne({ _id: trip_id }).populate(['is_user_rated', 'is_driver_rated']);
+  if (trip_detail) {
+    if (trip_detail.is_user_rated && trip_detail.is_driver_rated) {
       await Trip.findOneAndUpdate({ _id: trip_id },
-        { $set: 
+        {
+          $set:
           {
-            trip_status:'completed'
+            trip_status: 'completed'
           }
         },
         { new: true }
       ).exec();
     }
-    else
-    {
+    else {
       await Trip.findOneAndUpdate({ _id: trip_id },
-        { $set: 
+        {
+          $set:
           {
-            trip_status:'rating'
+            trip_status: 'rating'
           }
         },
         { new: true }
@@ -1154,95 +1158,121 @@ async function check_rating_for_complete_trip(trip_id) {
     }
   }
 }
-exports.rate_user = async(req, res) => {
+
+exports.rate_user = async (req, res) => {
   var requests = req.bodyParams
   var trip_details = await Trip.findOne({ '_id': requests.trip_id });
-  if(trip_details)
-  {
+  if (trip_details) {
     var new_rating = new Rating({
       user_id: trip_details.user_id,
       trip_id: requests.trip_id,
       driver_id: trip_details.driver_id,
       rating: requests.rating,
       message: requests.message,
-      rating_type:'driver-user'
+      rating_type: 'driver-user'
     })
-    new_rating.save(async(err, result) => {
-        var five_star_rating = await Rating.find({ 'user_id': trip_details.user_id,'rating_type':'driver-user', 'rating': 5 });
-        var four_star_rating = await Rating.find({ 'user_id': trip_details.user_id,'rating_type':'driver-user', 'rating': 4 });
-        var three_star_rating = await Rating.find({ 'user_id': trip_details.user_id,'rating_type':'driver-user', 'rating': 3 });
-        var two_star_rating = await Rating.find({ 'user_id': trip_details.user_id,'rating_type':'driver-user', 'rating': 2 });
-        var one_star_rating = await Rating.find({ 'user_id': trip_details.user_id,'rating_type':'driver-user', 'rating': 1 });
-        five_star_rating = five_star_rating.length;
-        four_star_rating = four_star_rating.length;
-        three_star_rating = three_star_rating.length;
-        two_star_rating = two_star_rating.length;
-        one_star_rating = one_star_rating.length;
-        var total_rating = (5 * five_star_rating + 4 * four_star_rating + 3 * three_star_rating + 2 * two_star_rating + 1 * one_star_rating) / (five_star_rating + four_star_rating + three_star_rating + two_star_rating + one_star_rating)
-        total_rating = parseFloat(total_rating).toFixed(1).toString()
-        await check_rating_for_complete_trip(requests.trip_id);
-        await User.findOneAndUpdate({ "_id": trip_details.user_id }, { "$set": { 'user_rating': total_rating } }, { new: true }).exec();
-        return res.apiResponse(true, "Review Updated Successfully")
+    new_rating.save(async (err, result) => {
+      var five_star_rating = await Rating.find({ 'user_id': trip_details.user_id, 'rating_type': 'driver-user', 'rating': 5 });
+      var four_star_rating = await Rating.find({ 'user_id': trip_details.user_id, 'rating_type': 'driver-user', 'rating': 4 });
+      var three_star_rating = await Rating.find({ 'user_id': trip_details.user_id, 'rating_type': 'driver-user', 'rating': 3 });
+      var two_star_rating = await Rating.find({ 'user_id': trip_details.user_id, 'rating_type': 'driver-user', 'rating': 2 });
+      var one_star_rating = await Rating.find({ 'user_id': trip_details.user_id, 'rating_type': 'driver-user', 'rating': 1 });
+      five_star_rating = five_star_rating.length;
+      four_star_rating = four_star_rating.length;
+      three_star_rating = three_star_rating.length;
+      two_star_rating = two_star_rating.length;
+      one_star_rating = one_star_rating.length;
+      var total_rating = (5 * five_star_rating + 4 * four_star_rating + 3 * three_star_rating + 2 * two_star_rating + 1 * one_star_rating) / (five_star_rating + four_star_rating + three_star_rating + two_star_rating + one_star_rating)
+      total_rating = parseFloat(total_rating).toFixed(1).toString()
+      await check_rating_for_complete_trip(requests.trip_id);
+      await User.findOneAndUpdate({ "_id": trip_details.user_id }, { "$set": { 'user_rating': total_rating } }, { new: true }).exec();
+      return res.apiResponse(true, "Review Updated Successfully")
     })
   }
-  else
-  {
+  else {
     return res.apiResponse(false, "Invalid Trip")
   }
 }
 
-exports.rate_driver = async(req, res) => {
+
+exports.get_rates = async (req, res) => {
+  var requests = req.bodyParams;
+  var page = requests.page || 1
+  var per_page = requests.per_page || 10
+  var pagination = requests.pagination || "false"
+  const match = {}
+
+  var sort = { createdAt: -1 }
+  if (requests.search && requests.search != "") {
+    match.name = { $regex: new RegExp("^" + requests.search, "i") }
+  }
+
+  const options = {
+    page: page,
+    limit: per_page,
+    sort: sort
+  };
+
+
+  if (pagination == "true") {
+    Rating.paginate(match, options, function (err, rating) {
+      return res.apiResponse(true, "Success", { rating })
+    });
+  }
+  else {
+    var rating = await Rating.find(match).sort(sort);
+    return res.apiResponse(true, "Success", { rating })
+  }
+}
+
+
+exports.rate_driver = async (req, res) => {
   var requests = req.bodyParams
   var trip_details = await Trip.findOne({ '_id': requests.trip_id });
-  if(trip_details)
-  {
+  if (trip_details) {
     var new_rating = new Rating({
       user_id: trip_details.user_id,
       trip_id: requests.trip_id,
       driver_id: trip_details.driver_id,
       rating: requests.rating,
       message: requests.message,
-      rating_type:'user-driver'
+      rating_type: 'user-driver'
     })
-    new_rating.save(async(err, result) => {
-        var five_star_rating = await Rating.find({ 'driver_id': trip_details.driver_id,'rating_type':'user-driver', 'rating': 5 });
-        var four_star_rating = await Rating.find({ 'driver_id': trip_details.driver_id,'rating_type':'user-driver', 'rating': 4 });
-        var three_star_rating = await Rating.find({ 'driver_id': trip_details.driver_id,'rating_type':'user-driver', 'rating': 3 });
-        var two_star_rating = await Rating.find({ 'driver_id': trip_details.driver_id,'rating_type':'user-driver', 'rating': 2 });
-        var one_star_rating = await Rating.find({ 'driver_id': trip_details.driver_id,'rating_type':'user-driver', 'rating': 1 });
-        five_star_rating = five_star_rating.length;
-        four_star_rating = four_star_rating.length;
-        three_star_rating = three_star_rating.length;
-        two_star_rating = two_star_rating.length;
-        one_star_rating = one_star_rating.length;
-        var total_rating = (5 * five_star_rating + 4 * four_star_rating + 3 * three_star_rating + 2 * two_star_rating + 1 * one_star_rating) / (five_star_rating + four_star_rating + three_star_rating + two_star_rating + one_star_rating)
-        total_rating = parseFloat(total_rating).toFixed(1).toString()
-        await check_rating_for_complete_trip(requests.trip_id);
-        await User.findOneAndUpdate({ "_id": trip_details.driver_id }, { "$set": { 'user_rating': total_rating } }, { new: true }).exec();
-        return res.apiResponse(true, "Review Updated Successfully")
+    new_rating.save(async (err, result) => {
+      var five_star_rating = await Rating.find({ 'driver_id': trip_details.driver_id, 'rating_type': 'user-driver', 'rating': 5 });
+      var four_star_rating = await Rating.find({ 'driver_id': trip_details.driver_id, 'rating_type': 'user-driver', 'rating': 4 });
+      var three_star_rating = await Rating.find({ 'driver_id': trip_details.driver_id, 'rating_type': 'user-driver', 'rating': 3 });
+      var two_star_rating = await Rating.find({ 'driver_id': trip_details.driver_id, 'rating_type': 'user-driver', 'rating': 2 });
+      var one_star_rating = await Rating.find({ 'driver_id': trip_details.driver_id, 'rating_type': 'user-driver', 'rating': 1 });
+      five_star_rating = five_star_rating.length;
+      four_star_rating = four_star_rating.length;
+      three_star_rating = three_star_rating.length;
+      two_star_rating = two_star_rating.length;
+      one_star_rating = one_star_rating.length;
+      var total_rating = (5 * five_star_rating + 4 * four_star_rating + 3 * three_star_rating + 2 * two_star_rating + 1 * one_star_rating) / (five_star_rating + four_star_rating + three_star_rating + two_star_rating + one_star_rating)
+      total_rating = parseFloat(total_rating).toFixed(1).toString()
+      await check_rating_for_complete_trip(requests.trip_id);
+      await User.findOneAndUpdate({ "_id": trip_details.driver_id }, { "$set": { 'user_rating': total_rating } }, { new: true }).exec();
+      return res.apiResponse(true, "Review Updated Successfully")
     })
   }
-  else
-  {
+  else {
     return res.apiResponse(false, "Invalid Trip")
   }
 }
-exports.request_order = async(req, res, next) => 
-{
+exports.request_order = async (req, res, next) => {
   var requests = req.bodyParams;
-  if(!requests.care_giver_id)
-  {
+  if (!requests.care_giver_id) {
     delete requests.care_giver_id;
   }
   console.log(requests)
   var category_detail = await Category.findOne({ '_id': requests.category_id });
   category_detail = JSON.parse(JSON.stringify(category_detail));
   var price_detail = {}
-  if(typeof requests.distances.selected_origin==="undefined")
-  {
+  if (typeof requests.distances.selected_origin === "undefined") {
     requests.distances = JSON.parse(requests.distances);
   }
-  price_detail.total = parseFloat(category_detail.price * (requests.distances.distanceValue/1000)).toFixed(2);
+  price_detail.total = parseFloat(category_detail.price * (requests.distances.distanceValue / 1000)).toFixed(2);
   var trip_detail = {
     user_id: requests.user_id,
     care_giver_id: requests.care_giver_id,
@@ -1250,112 +1280,106 @@ exports.request_order = async(req, res, next) =>
     category_detail: category_detail,
     distances: requests.distances,
     payment_mode: requests.payment_mode,
-    price_detail:price_detail,
-    is_care_giver:(requests.service_type=='Independent Trip')?false:true
+    price_detail: price_detail,
+    is_care_giver: (requests.service_type == 'Independent Trip') ? false : true
   };
-  
+
   var newTrip = new Trip(trip_detail);
   var trip_detail = await newTrip.save();
 
 
-  function_request_order(requests,trip_detail).then(async(trip_detail) => {
-    if(trip_detail=="no_drivers")
-    {
-        return res.apiResponse(false, "No Drivers found near you")
+  function_request_order(requests, trip_detail).then(async (trip_detail) => {
+    if (trip_detail == "no_drivers") {
+      return res.apiResponse(false, "No Drivers found near you")
     }
-    else if(trip_detail=="already_process")
-    {
-        return res.apiResponse(false, "Trip already processing")
+    else if (trip_detail == "already_process") {
+      return res.apiResponse(false, "Trip already processing")
     }
-    else
-    {
+    else {
       await caregiver_push_notifications(trip_detail);
-      return res.apiResponse(true, "Trip request processing", { trip_detail } )
+      return res.apiResponse(true, "Trip request processing", { trip_detail })
     }
   });
 }
 
-async function function_request_order(requests,trip_detail) {
+async function function_request_order(requests, trip_detail) {
   var trip_details = await Trip.findOne({ 'user_id': requests.user_id, 'trip_status': "pending" });
-  var orgin = requests.distances.selected_origin.split(',')  
+  var orgin = requests.distances.selected_origin.split(',')
   var match = {
-        role: 2,
-        status: 'active'    
+    role: 2,
+    status: 'active'
+  }
+  match['trip_status'] = 'online';
+  match['category_id'] = requests.category_id;
+  match['location'] = {
+    $nearSphere: {
+      $maxDistance: 20 * 1000,
+      $geometry: {
+        type: "Point",
+        coordinates: orgin
       }
-    match['trip_status'] = 'online';
-    match['category_id'] = requests.category_id;
-    match['location'] = { 
-        $nearSphere: {
-            $maxDistance: 20 * 1000,
-            $geometry: {
-                type: "Point",
-                coordinates: orgin
-            }
-        }
     }
-    // match['email']={$in:["eashwar@gmail.com","hari.m@gmail.com"]};
-    var get_drivers = await User.find(match);
-    console.log("nearest drivers",get_drivers.length)
-    if (get_drivers.length) {
-      var trip_request_old = await RequestDetail.find({ 'trip_id': trip_details._id });
-      if (!trip_request_old.length) 
-      {
-        await Trip.findOneAndUpdate({ "_id": trip_detail._id }, { "$set": { trip_status: 'processing'}}).exec();
-        trip_detail.trip_status = "processing";
+  }
+  // match['email']={$in:["eashwar@gmail.com","hari.m@gmail.com"]};
+  var get_drivers = await User.find(match);
+  console.log("nearest drivers", get_drivers.length)
+  if (get_drivers.length) {
+    var trip_request_old = await RequestDetail.find({ 'trip_id': trip_details._id });
+    if (!trip_request_old.length) {
+      await Trip.findOneAndUpdate({ "_id": trip_detail._id }, { "$set": { trip_status: 'processing' } }).exec();
+      trip_detail.trip_status = "processing";
 
-        for (let i = 0; i < get_drivers.length; ++i) {
-          var already_requested_driver = await RequestDetail.find({ 'driver_id': get_drivers[i]._id });
-          var distance = geolib.getDistance({ latitude: get_drivers[i].location.coordinates[0], longitude: get_drivers[i].location.coordinates[1] }, { latitude: orgin[0], longitude: orgin[1] })
-            var km = "1";
-            if (distance >= 1000) {
-                km = parseFloat(parseFloat(distance) / 1000).toFixed(2);
-            }
-            var duration = Number(Math.round(parseInt(km)/50 * 60)).toString()+" mins";
-            if (already_requested_driver.length) {
-              var new_request_data = {
-                user_id: requests.user_id,
-                care_giver_id: requests.care_giver_id,
-                trip_id: trip_detail._id,
-                driver_id: get_drivers[i]._id,
-                request_status: 'Pending',
-                sort: i,
-                duration:duration,
-                is_deleted:false
-              }
-            } 
-            else {
-              var new_request_data = {
-                user_id: requests.user_id,
-                care_giver_id: requests.care_giver_id,
-                trip_id: trip_detail._id,
-                driver_id: get_drivers[i]._id,
-                request_status: 'Requesting',
-                sort: i,
-                duration:duration,
-                is_deleted:false
-              }
-            }
-            var new_request = new RequestDetail(new_request_data);
-            await new_request.save();
+      for (let i = 0; i < get_drivers.length; ++i) {
+        var already_requested_driver = await RequestDetail.find({ 'driver_id': get_drivers[i]._id });
+        var distance = geolib.getDistance({ latitude: get_drivers[i].location.coordinates[0], longitude: get_drivers[i].location.coordinates[1] }, { latitude: orgin[0], longitude: orgin[1] })
+        var km = "1";
+        if (distance >= 1000) {
+          km = parseFloat(parseFloat(distance) / 1000).toFixed(2);
         }
-        commonHelper.put_logs(trip_detail.user_id,trip_detail.invoice_id+" - Requesting Drivers");
-        Agenda.now('requestProcess', { trip_detail }) // requests
-        return trip_detail;
-      } 
-      else
-      {
-        return "already_process";
+        var duration = Number(Math.round(parseInt(km) / 50 * 60)).toString() + " mins";
+        if (already_requested_driver.length) {
+          var new_request_data = {
+            user_id: requests.user_id,
+            care_giver_id: requests.care_giver_id,
+            trip_id: trip_detail._id,
+            driver_id: get_drivers[i]._id,
+            request_status: 'Pending',
+            sort: i,
+            duration: duration,
+            is_deleted: false
+          }
+        }
+        else {
+          var new_request_data = {
+            user_id: requests.user_id,
+            care_giver_id: requests.care_giver_id,
+            trip_id: trip_detail._id,
+            driver_id: get_drivers[i]._id,
+            request_status: 'Requesting',
+            sort: i,
+            duration: duration,
+            is_deleted: false
+          }
+        }
+        var new_request = new RequestDetail(new_request_data);
+        await new_request.save();
       }
-    } 
-    else {
-      var new_result = {}
-      new_result.message = "not_available"
-      global.io.in("user_" + trip_detail.user_id).emit('not_accept', {});
-      return "no_drivers";
+      commonHelper.put_logs(trip_detail.user_id, trip_detail.invoice_id + " - Requesting Drivers");
+      Agenda.now('requestProcess', { trip_detail }) // requests
+      return trip_detail;
     }
+    else {
+      return "already_process";
+    }
+  }
+  else {
+    var new_result = {}
+    new_result.message = "not_available"
+    global.io.in("user_" + trip_detail.user_id).emit('not_accept', {});
+    return "no_drivers";
+  }
 }
-exports.create_stripe_token = async(req, res, next) => 
-{
+exports.create_stripe_token = async (req, res, next) => {
   // var requests = req.bodyParams;
   // var charge = stripe.sources.create({  // stripe payment start
   //   type: 'ach_credit_transfer',
@@ -1371,32 +1395,30 @@ exports.create_stripe_token = async(req, res, next) =>
   //     return res.apiResponse(true, "Charged", {charge})
   //   }
   // })
-  commonHelper.send_mail_nodemailer("ak@waioz.com","booking_confirmation",{});
+  commonHelper.send_mail_nodemailer("ak@waioz.com", "booking_confirmation", {});
   return res.apiResponse(true, "Charged")
 }
 async function get_stripe_customer_id(user_detail) {
-  if(user_detail.stripe_customer)
-  {
+  if (user_detail.stripe_customer) {
     return user_detail.stripe_customer;
   }
-  else
-  {
+  else {
     var customer = await stripe.customers.create({  // stripe payment start
-      name:  user_detail.name,
-      email:  user_detail.email,
-      phone:  user_detail.phone,
-      description:  "Transport Care Customer "+user_detail.email
+      name: user_detail.name,
+      email: user_detail.email,
+      phone: user_detail.phone,
+      description: "Transport Care Customer " + user_detail.email
     })
-    if(!customer.id)
-    {
+    if (!customer.id) {
       return false;
     }
-    else{
-      await User.findOneAndUpdate({ _id: user_detail.id},
-        { $set: 
+    else {
+      await User.findOneAndUpdate({ _id: user_detail.id },
+        {
+          $set:
           {
-          'stripe_customer': customer.id
-          }  
+            'stripe_customer': customer.id
+          }
         },
         { new: true }
       ).exec();
@@ -1404,18 +1426,16 @@ async function get_stripe_customer_id(user_detail) {
     }
   }
 }
-exports.add_stripe_card = async(req, res, next) => 
-{
+exports.add_stripe_card = async (req, res, next) => {
   var requests = req.bodyParams;
   var user_detail = await User.findOne({ "_id": requests.user_id });
-  await get_stripe_customer_id(user_detail).then(async(customer_id) => {
-    if(customer_id)
-    {
-      var card_details = await stripe.customers.createSource(customer_id,{
+  await get_stripe_customer_id(user_detail).then(async (customer_id) => {
+    if (customer_id) {
+      var card_details = await stripe.customers.createSource(customer_id, {
         source: requests.token
       }, async (err, card_details) => {
         if (err) {
-          return res.apiResponse(false, "Failed", {err})
+          return res.apiResponse(false, "Failed", { err })
         }
         else {
           var card_data = {}
@@ -1424,57 +1444,49 @@ exports.add_stripe_card = async(req, res, next) =>
           card_data.user_id = requests.user_id;
           let stripe_card = new StripeCards(card_data);
           await stripe_card.save();
-          return res.apiResponse(true, "Card added succesfully",{stripe_card})
+          return res.apiResponse(true, "Card added succesfully", { stripe_card })
         }
       })
     }
-    else
-    {
+    else {
       return res.apiResponse(false, "Error on creating stripe customer")
     }
   })
 }
-exports.delete_stripe_card = async(req, res, next) => 
-{
+exports.delete_stripe_card = async (req, res, next) => {
   var requests = req.bodyParams;
   await StripeCards.findById(requests.card_id, async (err, card) => {
     if (card) {
       await card.remove();
       return res.apiResponse(true, "Card deleted successfully")
     }
-    else
-    {
+    else {
       return res.apiResponse(false, "Invalid Card Id")
     }
   });
 }
-exports.get_stripe_cards = async(req, res, next) => 
-{
+exports.get_stripe_cards = async (req, res, next) => {
   var requests = req.bodyParams;
-  var match={}
-  match.user_id=requests.user_id;
-  var stripe_cards = await StripeCards.find(match).sort({createdAt:-1});
-  return res.apiResponse(true, "Success", {stripe_cards})
+  var match = {}
+  match.user_id = requests.user_id;
+  var stripe_cards = await StripeCards.find(match).sort({ createdAt: -1 });
+  return res.apiResponse(true, "Success", { stripe_cards })
 }
-async function add_stripe_card_while_payment(requests,user_detail,trip_details) {
-  if(trip_details.payment_mode=="wallet" || trip_details.payment_mode=="coh")
-  {
-    return {status:true,token:trip_details.payment_mode, type:"saved_card"}
+async function add_stripe_card_while_payment(requests, user_detail, trip_details) {
+  if (trip_details.payment_mode == "wallet" || trip_details.payment_mode == "coh") {
+    return { status: true, token: trip_details.payment_mode, type: "saved_card" }
   }
-  else if(requests.card_type=="existing")
-  {
-    return {status:true,token:requests.token, type:"saved_card"}
+  else if (requests.card_type == "existing") {
+    return { status: true, token: requests.token, type: "saved_card" }
   }
-  else if(requests.save_card && requests.card_type=="new")
-  {
+  else if (requests.save_card && requests.card_type == "new") {
     var customer_id = await get_stripe_customer_id(user_detail);
-    if(customer_id)
-    {
-      var card_details = await stripe.customers.createSource(customer_id,{
+    if (customer_id) {
+      var card_details = await stripe.customers.createSource(customer_id, {
         source: requests.token
       })
       if (!card_details.id) {
-        return {status:false,token:requests.token, type:"Error on saving stripe card"}
+        return { status: false, token: requests.token, type: "Error on saving stripe card" }
       }
       else {
         var card_data = {}
@@ -1483,126 +1495,112 @@ async function add_stripe_card_while_payment(requests,user_detail,trip_details) 
         card_data.user_id = requests.user_id;
         let stripe_card_data = new StripeCards(card_data);
         await stripe_card_data.save();
-        return {status:true,token:card_details.id, type:"saved_card"}
+        return { status: true, token: card_details.id, type: "saved_card" }
       }
     }
-    else
-    {
-      return {status:false,token:requests.token, type:"Error on creating stripe customer"}
+    else {
+      return { status: false, token: requests.token, type: "Error on creating stripe customer" }
     }
   }
-  else
-  {
-    return {status:true,token:requests.token, type:"token"}
+  else {
+    return { status: true, token: requests.token, type: "token" }
   }
 }
 async function caregiver_push_notifications(trip_details) {
-  if(trip_details && trip_details.service_type!="Independent Trip")
-  {
-    console.log("1499",trip_details)
-    var caregiver_detail = await User.findOne({'_id':trip_details.care_giver_id});
-    var user_detail = await User.findOne({'_id':trip_details.user_id});
-    var driver_detail = await User.findOne({'_id':trip_details.driver_id});
-    console.log(caregiver_detail,"1503")
-    if(user_detail && (user_detail.role==1 || user_detail.role=="1") && trip_details.care_giver_id)
-    {
-      console.log("1505",trip_details)
-      var message=""
+  if (trip_details && trip_details.service_type != "Independent Trip") {
+    console.log("1499", trip_details)
+    var caregiver_detail = await User.findOne({ '_id': trip_details.care_giver_id });
+    var user_detail = await User.findOne({ '_id': trip_details.user_id });
+    var driver_detail = await User.findOne({ '_id': trip_details.driver_id });
+    console.log(caregiver_detail, "1503")
+    if (user_detail && (user_detail.role == 1 || user_detail.role == "1") && trip_details.care_giver_id) {
+      console.log("1505", trip_details)
+      var message = ""
       // processing, accepted ,arrived, start_trip, end_trip, payment, rating, completed, cancelled
       switch (trip_details.trip_status) {
         case "processing":
-          message=trip_details.invoice_id+" - "+"Trying to reach your place, Requesting drivers now"
+          message = trip_details.invoice_id + " - " + "Trying to reach your place, Requesting drivers now"
           break;
         case "accepted":
-          message=trip_details.invoice_id+" - "+driver_detail.name+" accepted request";
-          commonHelper.put_logs(trip_details.care_giver_id,trip_details.invoice_id+" - Request accepted by "+trip_details.driver_detail.name);
+          message = trip_details.invoice_id + " - " + driver_detail.name + " accepted request";
+          commonHelper.put_logs(trip_details.care_giver_id, trip_details.invoice_id + " - Request accepted by " + trip_details.driver_detail.name);
           break;
         case "arrived":
-          message=trip_details.invoice_id+" - "+driver_detail.name+" reached undercare's location and ready to pickup";
+          message = trip_details.invoice_id + " - " + driver_detail.name + " reached undercare's location and ready to pickup";
           break;
         case "start_trip":
-          message=trip_details.invoice_id+" - "+" Trip Started, will be reach in "+trip_details.duration;
-        break;
+          message = trip_details.invoice_id + " - " + " Trip Started, will be reach in " + trip_details.duration;
+          break;
         case "end_trip":
-          message=trip_details.invoice_id+" - "+" Reached your location";
-        break;
+          message = trip_details.invoice_id + " - " + " Reached your location";
+          break;
         case "cancelled":
-          message=trip_details.invoice_id+" - "+" Cancelled the appointment";
-        break;
+          message = trip_details.invoice_id + " - " + " Cancelled the appointment";
+          break;
         default:
           break;
       }
-      commonHelper.put_logs(trip_details.care_giver_id,message);
+      commonHelper.put_logs(trip_details.care_giver_id, message);
       if (caregiver_detail.device_id && caregiver_detail.device_id.length) {
         for (let i = 0; i < caregiver_detail.device_id.length; ++i) {
           Firebase.singleNotification(
             caregiver_detail.device_id[i],
-            "Under Care ["+user_detail.name+"]",
+            "Under Care [" + user_detail.name + "]",
             message
           );
         }
       }
     }
   }
-  
+
 }
-async function make_payment(payment_data,trip_details,user_detail) {
+async function make_payment(payment_data, trip_details, user_detail) {
   var payment_mode = trip_details.payment_mode;
-  if(payment_mode=="card")
-  {
+  if (payment_mode == "card") {
     var charge = await stripe.charges.create(payment_data);
     if (charge.id) {
-      return {status:true,message:charge.id,payment_type:"payment_gateway"}
+      return { status: true, message: charge.id, payment_type: "payment_gateway" }
     }
     else {
-      return {status:false,message:"Payment Failed"}
+      return { status: false, message: "Payment Failed" }
     }
   }
-  else if(payment_mode=="wallet")
-  {
-    if(parseFloat(payment_data.amount/100)<=parseFloat(user_detail.wallet_amount))
-    {
-      var updated_wallet_amount = (parseFloat(user_detail.wallet_amount)- parseFloat(payment_data.amount/100)).toFixed(2)
+  else if (payment_mode == "wallet") {
+    if (parseFloat(payment_data.amount / 100) <= parseFloat(user_detail.wallet_amount)) {
+      var updated_wallet_amount = (parseFloat(user_detail.wallet_amount) - parseFloat(payment_data.amount / 100)).toFixed(2)
       await User.findOneAndUpdate(
         { _id: user_detail.id },
-        { $set: {wallet_amount: updated_wallet_amount} },
+        { $set: { wallet_amount: updated_wallet_amount } },
       ).exec();
-      return {status:true,message:"",payment_type:"wallet_payment"}
+      return { status: true, message: "", payment_type: "wallet_payment" }
     }
-    else
-    {
-      return {status:false,message:"Insufficient balance in your wallet",payment_type:"wallet_payment"}
+    else {
+      return { status: false, message: "Insufficient balance in your wallet", payment_type: "wallet_payment" }
     }
   }
-  else
-  {
-    return {status:true,message:"",payment_type:"cash"}
+  else {
+    return { status: true, message: "", payment_type: "cash" }
   }
 }
-exports.trip_payment = async(req, res, next) => 
-{
+exports.trip_payment = async (req, res, next) => {
   var requests = req.bodyParams;
-  var trip_details = await Trip.findOne({_id:requests.trip_id});
-  if(trip_details)
-  {
+  var trip_details = await Trip.findOne({ _id: requests.trip_id });
+  if (trip_details) {
     var user_detail = await User.findOne({ "_id": requests.user_id });
-    add_stripe_card_while_payment(requests,user_detail,trip_details).then(async(results) => {
-      if(results.status)
-      {
+    add_stripe_card_while_payment(requests, user_detail, trip_details).then(async (results) => {
+      if (results.status) {
         var payment_amount = Math.round(parseFloat(trip_details.price_detail.total));
-        var payment_data={
-          amount:  payment_amount*100,
+        var payment_data = {
+          amount: payment_amount * 100,
           currency: 'sgd',
           source: results.token,
-          receipt_email:user_detail.email
+          receipt_email: user_detail.email
         }
-        if(user_detail.stripe_customer)
-        {
+        if (user_detail.stripe_customer) {
           payment_data.customer = user_detail.stripe_customer
         }
-        make_payment(payment_data,trip_details,user_detail).then(async(payment_results) => {
-          if(payment_results.status)
-          {
+        make_payment(payment_data, trip_details, user_detail).then(async (payment_results) => {
+          if (payment_results.status) {
             var transaction_data = {}
             transaction_data.amount = trip_details.price_detail.total;
             transaction_data.orginal_amount = trip_details.price_detail.total;
@@ -1613,62 +1611,58 @@ exports.trip_payment = async(req, res, next) =>
             transaction_data.status = 'completed';
             let transactions = new TransactionModel(transaction_data);
             await transactions.save();
-            await Trip.findOneAndUpdate({ _id: requests.trip_id },{ $set: {'paid_at':moment(),'payment_status':'Paid','trip_status': 'rating'}},{ new: true },async(err,trip_detail)=>{
-              var trip_populate=['user_detail','caregiver_detail','driver_detail',
-              {
-                path:'user_rating',
-                match:{rating_type:'driver-user'}
-              },
-              {
-                path:'driver_rating',
-                match:{rating_type:'user-driver'}
-              },
-              {
-                path:'is_user_rated',
-                match:{rating_type:'driver-user'}
-              },
-              {
-                path:'is_driver_rated',
-                match:{rating_type:'user-driver'}
-              }];
-              var trip_detail = await Trip.findOne({ _id: requests.trip_id}).populate(trip_populate);
-              global.io.in("trip_"+ trip_detail.id).emit('trip_detail', { trip_detail });
+            await Trip.findOneAndUpdate({ _id: requests.trip_id }, { $set: { 'paid_at': moment(), 'payment_status': 'Paid', 'trip_status': 'rating' } }, { new: true }, async (err, trip_detail) => {
+              var trip_populate = ['user_detail', 'caregiver_detail', 'driver_detail',
+                {
+                  path: 'user_rating',
+                  match: { rating_type: 'driver-user' }
+                },
+                {
+                  path: 'driver_rating',
+                  match: { rating_type: 'user-driver' }
+                },
+                {
+                  path: 'is_user_rated',
+                  match: { rating_type: 'driver-user' }
+                },
+                {
+                  path: 'is_driver_rated',
+                  match: { rating_type: 'user-driver' }
+                }];
+              var trip_detail = await Trip.findOne({ _id: requests.trip_id }).populate(trip_populate);
+              global.io.in("trip_" + trip_detail.id).emit('trip_detail', { trip_detail });
             }).exec();
             return res.apiResponse(true, "Payment Success")
           }
-          else
-          {
+          else {
             return res.apiResponse(false, payment_results.message)
           }
         })
       }
-      else
-      {
+      else {
         return res.apiResponse(false, results.type)
       }
     })
   }
-  else
-  {
+  else {
     return res.apiResponse(false, "Invalid Trip Id")
   }
 }
-exports.add_wallet = async(req, res, next) => 
-{
+exports.add_wallet = async (req, res, next) => {
   var requests = req.bodyParams;
   var charge = await stripe.charges.create({  // stripe payment start
-    amount:  Math.round(parseInt(requests.total_amount)*100),
+    amount: Math.round(parseInt(requests.total_amount) * 100),
     currency: 'sgd',
     source: requests.token
   }, async (err, charge) => {
     if (err) {
-      return res.apiResponse(false, "Failed", {err})
+      return res.apiResponse(false, "Failed", { err })
     }
     else {
       var user_detail = await User.findOne({ "_id": requests.user_id });
       let current_user_wallet = 0
-      if(user_detail.wallet_amount && user_detail.wallet_amount !== 'NaN'){
-          current_user_wallet = user_detail.wallet_amount 
+      if (user_detail.wallet_amount && user_detail.wallet_amount !== 'NaN') {
+        current_user_wallet = user_detail.wallet_amount
       }
       user_detail.wallet_amount = Number(parseFloat(current_user_wallet) + parseFloat(requests.total_amount)).toFixed(2);
       await user_detail.save();
@@ -1683,10 +1677,10 @@ exports.add_wallet = async(req, res, next) =>
       /**
        * @info send email using through nodemailer after payment *(booking confirmatin)
        */
-      commonHelper.send_mail_nodemailer(user_detail.email,"booking_confirmation",{});
+      commonHelper.send_mail_nodemailer(user_detail.email, "booking_confirmation", {});
       let transactions = new TransactionModel(transaction_data);
       await transactions.save();
-      return res.apiResponse(true, "Amount added", {user_detail})
+      return res.apiResponse(true, "Amount added", { user_detail })
     }
   })
 }

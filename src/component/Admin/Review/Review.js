@@ -5,7 +5,6 @@ import '../../../scss/template.scss';
 import AdminSider from '../Layout/AdminSider';
 import AdminHeader from '../Layout/AdminHeader';
 import ReviewTable from './Review_Table';
-import HideReview_Table from './HideReview_Table';
 import { Layout, Tabs } from 'antd';
 
 const { Content } = Layout;
@@ -32,9 +31,6 @@ class Review extends React.Component {
                         <Tabs>
                             <TabPane tab="Show Review" key="1">
                                 <ReviewTable />
-                            </TabPane>
-                            <TabPane tab="Hide Review" key="2">
-                                <HideReview_Table />
                             </TabPane>
                         </Tabs>
                     </Content>

@@ -28,6 +28,7 @@ router.post('/request_order', Usercontroller.request_order);
 router.post('/get_trips', Usercontroller.get_trips);
 router.post('/rate_user', Usercontroller.rate_user);
 router.post('/rate_driver', Usercontroller.rate_driver);
+router.post('/get_rates', Usercontroller.get_rates);
 router.post('/create_stripe_token', Usercontroller.create_stripe_token);
 router.post('/add_wallet', Usercontroller.add_wallet);
 router.post('/get_wallet_data', Usercontroller.get_wallet_data);
@@ -38,7 +39,7 @@ router.post('/add_stripe_card', Usercontroller.add_stripe_card);
 router.post('/delete_stripe_card', Usercontroller.delete_stripe_card);
 router.post('/get_logs', Usercontroller.get_logs);
 router.post('/get_driver_status', Usercontroller.get_driver_status);
-// router.post('/get_pagination',Usercontroller.get_pagination)
+router.post('/get_driver_locations',Usercontroller.get_driver_locations)
 // router.post('/get_users',Usercontroller.get_users)
 
 
